@@ -5,6 +5,8 @@ import os
 import sys
 import json
 import uuid
+from typing import Dict
+from pydantic import Field
 
 # Get the project root directory
 current_file = os.path.abspath(__file__)
@@ -70,7 +72,7 @@ app.add_middleware(
 class AgentRequest(BaseModel):
     message: str
     patient_id: str = "anonymous"
-    patient_info: dict = {}
+    patient_info: Dict = Field(default_factory=dict)
 
 @app.get("/")
 async def root():
@@ -109,7 +111,8 @@ async def chat_endpoint(websocket: WebSocket):
             
             async for event in graph_app.astream(state, config):
                 for node_name, node_output in event.items():
-                    if "messages" in node_output:
+                    if not isinstance(node_output, dict):
+                        continue
                         last_msg = node_output["messages"][-1]
                         content = last_msg.content if isinstance(last_msg, BaseMessage) else last_msg.get("content", "")
                         await websocket.send_json({
@@ -123,12 +126,11 @@ async def chat_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         pass
     except Exception as e:
-        print(f"WS Error: {e}")
+        await websocket.send_json({"error": str(e)})
 
 # --- Individual Worker REST Endpoints ---
 
 def run_agent_sync(node_func, request: AgentRequest):
-    """Helper to run a specific agent node in isolation."""
     state = {
         "messages": [HumanMessage(content=request.message)],
         "patient_id": request.patient_id,
@@ -137,20 +139,26 @@ def run_agent_sync(node_func, request: AgentRequest):
         "needs_review": False,
         "worker_results": {}
     }
-    result = node_func(state)
-    
-    # Extract message if present
+
+    try:
+        result = node_func(state)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
     message = ""
     if "messages" in result:
         last_msg = result["messages"][-1]
-        message = last_msg.content if isinstance(last_msg, BaseMessage) else last_msg.get("content", "")
-    
+        message = (
+            last_msg.content
+            if isinstance(last_msg, BaseMessage)
+            else last_msg.get("content", "")
+        )
+
     return {
         "response": message,
         "worker_results": result.get("worker_results", {}),
         "next_step": result.get("next", "receptionist")
     }
-
 @app.post("/agent/receptionist")
 async def receptionist_endpoint(request: AgentRequest):
     return run_agent_sync(receptionist_node, request)

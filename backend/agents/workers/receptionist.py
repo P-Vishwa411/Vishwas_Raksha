@@ -1,52 +1,45 @@
-import os
-import sys
+from backend.core.agent_contract import build_agent_response
+from langchain_core.messages import AIMessage
 
-# Get the project root directory
-current_file = os.path.abspath(__file__)
-workers_dir = os.path.dirname(current_file)
-agents_dir = os.path.dirname(workers_dir)
-backend_dir = os.path.dirname(agents_dir)
-project_root = os.path.dirname(backend_dir)
 
-# Add project root to sys.path if not already there
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-if backend_dir not in sys.path:
-    sys.path.insert(0, backend_dir)
-
-from langchain_core.messages import SystemMessage
-
-# Try importing ClinicState
-try:
-    from backend.agents.state import ClinicState
-except ImportError:
-    try:
-        from agents.state import ClinicState
-    except ImportError:
-        from state import ClinicState
-
-def receptionist_node(state: ClinicState):
+def receptionist_node(state: dict):
     """
     Initial triage, routing queries, and managing global state.
+    Always returns standardized agent response.
     """
-    # Simple intent extraction (In production, use LLM/Tool extraction)
+
     issue = state.get("current_issue", "").lower()
-    
-    if "appointment" in issue or "book" in issue or "schedule" in issue:
+
+    if any(word in issue for word in ["appointment", "book", "schedule"]):
         target = "appointment_agent"
-    elif "rash" in issue or "skin" in issue or "mole" in issue or "pain" in issue:
+        message = "I'll connect you to the appointment agent."
+
+    elif any(word in issue for word in ["rash", "skin", "mole", "pain"]):
         target = "specialist"
-    elif "report" in issue or "blood" in issue or "lab" in issue:
+        message = "Routing you to a medical specialist."
+
+    elif any(word in issue for word in ["report", "blood", "lab"]):
         target = "lab_analyst"
-    elif "wellness" in issue or "exercise" in issue or "diet" in issue:
+        message = "Connecting you to lab analysis."
+
+    elif any(word in issue for word in ["wellness", "exercise", "diet"]):
         target = "wellness_agent"
-    elif "prescription" in issue or "pill" in issue or "dose" in issue:
+        message = "Forwarding to wellness advisor."
+
+    elif any(word in issue for word in ["prescription", "pill", "dose"]):
         target = "prescription_analyzer"
-    elif "bill" in issue or "insurance" in issue:
+        message = "Sending to prescription analyzer."
+
+    elif any(word in issue for word in ["bill", "insurance"]):
         target = "admin_agent"
+        message = "Redirecting to administrative support."
+
     else:
-        # Default to Specialist for general medical triage
         target = "specialist"
-        
-    return {"next": target}
+        message = "I'll connect you to a general medical specialist."
+
+    return build_agent_response(
+        messages=[AIMessage(content=message)],
+        next_agent=target,
+        worker_results={"triage_decision": target}
+    )
