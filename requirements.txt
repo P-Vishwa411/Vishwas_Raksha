@@ -1,0 +1,28 @@
+# FastAPI and Server
+fastapi==0.115.0
+uvicorn[standard]==0.31.0
+websockets==13.1
+
+# LangGraph & LangChain
+langgraph==0.2.45
+langchain-core>=0.3.0
+langchain-openai>=0.1.25
+
+# Database
+sqlalchemy==2.0.35
+chromadb==0.5.5
+
+# Frontend
+streamlit==1.39.0
+
+# WebSocket client (for frontend)
+websocket-client==1.8.0
+
+# Utilities
+python-dotenv==1.0.1
+pydantic>=2.0
+requests==2.32.3
+
+# For prescription OCR (future use)
+# python-multipart==0.0.12
+# pillow==10.4.0
